@@ -35,8 +35,8 @@ type DiaryResponse struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deletedAt,omitempty"`
 	UserID    uint           `json:"userID"`
 	Content   string         `json:"content"`
-	User      UserResponse   `json:"user,omitempty"`
-	Tags      []TagResponse  `json:"tags,omitempty"`
+	//User      UserResponse   `json:"user,omitempty"`
+	Tags []TagResponse `json:"tags,omitempty"`
 }
 
 // UserResponse 用于API响应的用户信息

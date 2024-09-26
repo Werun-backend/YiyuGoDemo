@@ -3,6 +3,7 @@ package controllers
 import (
 	"awesomeProject1/middleware"
 	"awesomeProject1/pkg/models"
+	"awesomeProject1/request"
 	"awesomeProject1/response"
 	"errors"
 	"github.com/gin-gonic/gin"
@@ -43,18 +44,20 @@ func (ctrl *DiaryController) CreateDiary(c *gin.Context) {
 	userIDAny, _ := c.Get("user_id")
 	userID := userIDAny.(uint)
 	var diary models.Diary
+	var diaryDto request.DiaryDto
 
 	// 绑定请求中的 JSON 数据到 diary 变量中
-	if err := c.ShouldBindJSON(&diary); err != nil {
+	if err := c.ShouldBindJSON(&diaryDto); err != nil {
 		response.WriteJSON(c, response.NewResponse(1, nil, "无效的输入"))
 		return
 	}
 
 	// 检查日记内容是否为空
-	if diary.Content == "" {
+	if diaryDto.Content == "" {
 		response.WriteJSON(c, response.NewResponse(1, nil, "日记内容不能为空"))
 		return
 	}
+	diary.Content = diaryDto.Content
 
 	// 检查 user_id 是否在 users 表中存在
 	var user models.User
@@ -66,13 +69,13 @@ func (ctrl *DiaryController) CreateDiary(c *gin.Context) {
 
 	// 查找标签,未创建的接口返回错误
 	var tags []models.Tag
-	for _, tag := range diary.Tags {
-		var tag1 models.Tag
-		if err := ctrl.DB.First(&tag1, "name = ?", tag.Name).Error; err != nil {
+	for _, tagId := range diaryDto.TagIds {
+		var tag models.Tag
+		if err := ctrl.DB.First(&tag, "id = ?", tagId).Error; err != nil {
 			response.WriteJSON(c, response.NewResponse(1, nil, "标签未找到"))
 			return
 		}
-		tags = append(tags, tag1)
+		tags = append(tags, tag)
 	}
 
 	diary.Tags = tags
