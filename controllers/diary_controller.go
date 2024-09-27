@@ -26,7 +26,6 @@ func NewDiaryController(db *gorm.DB) *DiaryController {
 
 // Routes 注册日记相关的路由
 func (ctrl *DiaryController) Routes(r *gin.Engine) {
-	//添加jwt校验
 	diaries := r.Group("/diaries", middleware.JwtMiddleware())
 	{
 		diaries.POST("", ctrl.CreateDiary)       // 创建日记
@@ -34,7 +33,6 @@ func (ctrl *DiaryController) Routes(r *gin.Engine) {
 		diaries.GET("/:id", ctrl.GetDiary)       // 根据 ID 获取日记
 		diaries.PUT("/:id", ctrl.UpdateDiary)    // 更新日记
 		diaries.DELETE("/:id", ctrl.DeleteDiary) // 删除日记
-		//diaries.POST("/login", ctrl.Login)       // 用户登录
 	}
 }
 
@@ -46,7 +44,7 @@ func (ctrl *DiaryController) CreateDiary(c *gin.Context) {
 	var diary models.Diary
 	var diaryDto request.DiaryDto
 
-	// 绑定请求中的 JSON 数据到 diary 变量中
+	// 绑定请求中的 JSON 数据到 diaryDto 变量中
 	if err := c.ShouldBindJSON(&diaryDto); err != nil {
 		response.WriteJSON(c, response.NewResponse(1, nil, "无效的输入"))
 		return
@@ -61,7 +59,7 @@ func (ctrl *DiaryController) CreateDiary(c *gin.Context) {
 
 	// 检查 user_id 是否在 users 表中存在
 	var user models.User
-	if err := ctrl.DB.Where("id = ?", userID).First(&user).Error; err != nil {
+	if err := ctrl.DB.First(&user, "id = ?", userID).Error; err != nil {
 		response.WriteJSON(c, response.NewResponse(1, nil, "用户未找到"))
 		return
 	}
@@ -86,11 +84,9 @@ func (ctrl *DiaryController) CreateDiary(c *gin.Context) {
 	// 检查是否有错误发生
 	if result.Error != nil {
 		// 如果有错误，返回错误信息和 HTTP 500 状态码
-
 		response.WriteJSON(c, response.NewResponse(2, nil, "创建日记失败"))
 		return
 	}
-
 	// 如果创建成功，返回创建的日记和 HTTP 201 状态码
 	response.WriteJSON(c, response.NewResponse(0, diary, "日记创建成功"))
 }

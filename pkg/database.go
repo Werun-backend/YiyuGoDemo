@@ -19,8 +19,6 @@ func Connect(dbConfig *config.DatabaseConfig) (*gorm.DB, error) {
 
 	// 创建一个新的 GORM 实例
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
-		// 设置自动迁移模式
-		//AutomaticMigrations: false,
 		// 设置默认的事务超时时间
 		NowFunc: func() time.Time { return time.Now() },
 		// 设置日志记录器
@@ -42,13 +40,6 @@ func Connect(dbConfig *config.DatabaseConfig) (*gorm.DB, error) {
 
 	if err != nil {
 		log.Fatalf("failed to get raw database connection: %v", err)
-	}
-
-	stats := sqlDB.Stats()
-	log.Printf("Current Open Connections: %d\n", stats.OpenConnections) // 当前打开的连接数
-
-	if err != nil {
-		return nil, err
 	}
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)

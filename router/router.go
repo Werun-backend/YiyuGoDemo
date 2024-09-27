@@ -22,8 +22,9 @@ func NewAppRouter(db *gorm.DB) *AppRouter {
 	// 初始化控制器并设置路由
 	controllers.NewDiaryController(db).Routes(r)
 	controllers.NewTagController(db).Routes(r)
+	controllers.NewUserController(db).Routes(r)
 
-	r.POST("/diary/login", controllers.NewUserController(db).Login)
+	//r.POST("/diary/login", controllers.NewUserController(db).Login)
 
 	return &AppRouter{
 		DB:     db,
@@ -36,6 +37,8 @@ func (ar *AppRouter) Run(port string) error {
 	return ar.Engine.Run(port) // 使用 Gin 路由器的 Run 方法
 }
 
+/*
 func (ar *AppRouter) Use(handlerFunc gin.HandlerFunc) {
 	ar.Engine.Use(handlerFunc)
 }
+*/

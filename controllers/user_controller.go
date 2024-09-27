@@ -16,14 +16,14 @@ type UserController struct {
 	DB *gorm.DB
 }
 
-// 确保在 UserController 的 Routes 方法中注册 Login 路由
-func (ctrl *UserController) Routes(r *gin.Engine) {
-	r.POST("/diary/login", ctrl.Login)
-}
-
 // NewUserController 创建 UserController 的新实例
 func NewUserController(db *gorm.DB) *UserController {
 	return &UserController{DB: db}
+}
+
+// Routes 注册路由
+func (ctrl *UserController) Routes(r *gin.Engine) {
+	r.POST("/diary/login", ctrl.Login)
 }
 
 // Login 用户注册或登录
