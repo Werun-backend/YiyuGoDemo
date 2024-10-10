@@ -7,6 +7,7 @@ import (
 	"awesomeProject1/response"
 	"awesomeProject1/service"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"time"
@@ -85,8 +86,9 @@ func (ctrl *DiaryController) CreateDiary(c *gin.Context) {
 func (ctrl *DiaryController) GetDiaries(c *gin.Context) {
 	// 绑定查询参数
 	var queryParams struct {
-		Page      int    `form:"page" binding:"required,gte=1"`
-		PageSize  int    `form:"pageSize" binding:"required,gte=1"`
+		Page     int `form:"page" binding:"required,gte=1"`
+		PageSize int `form:"pageSize" binding:"required,gte=1"`
+		//UserID    string `form:"userId" binding:"required"`
 		TagID     string `form:"tagId"`
 		Content   string `form:"content"`
 		StartTime string `form:"startTime"`
@@ -96,12 +98,20 @@ func (ctrl *DiaryController) GetDiaries(c *gin.Context) {
 	}
 	if err := c.ShouldBindQuery(&queryParams); err != nil {
 		response.WriteJSON(c, response.UserErrorNoMsgResponse("无效的查询参数"))
+		fmt.Printf(err.Error())
 		return
 	}
 
+	// 从上下文中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.WriteJSON(c, response.UserErrorNoMsgResponse("用户未登录"))
+		c.Abort()
+		return
+	}
 	// 定义 modifier 函数
 	modifier := func(db *gorm.DB) *gorm.DB {
-		query := db
+		query := db.Where("user_id = ?", userID)
 		if queryParams.TagID != "" {
 			query = query.Where("tag_id = ?", queryParams.TagID)
 		}

@@ -16,9 +16,8 @@ type AppRouter struct {
 // NewAppRouter 初始化并返回 AppRouter 实例
 func NewAppRouter(db *gorm.DB) *AppRouter {
 	r := gin.Default() // 创建 Gin 路由器实例
-
 	r.Use(middleware.CORSMiddleware())
-
+	r.Use(middleware.JwtMiddleware())
 	// 初始化控制器并设置路由
 	controllers.NewDiaryController(db).Routes(r)
 	controllers.NewTagController(db).Routes(r)
