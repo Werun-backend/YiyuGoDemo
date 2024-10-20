@@ -7,8 +7,8 @@ import (
 // User 用户模型
 type User struct {
 	gorm.Model
-	PhoneNumber string `gorm:"unique;not null"`
-	Password    string `gorm:"not null"`
+	PhoneNumber string `json:"phoneNumber" gorm:"unique;not null"`
+	Password    string `json:"password" gorm:"not null"`
 }
 
 // CheckPassword 检查密码是否正确

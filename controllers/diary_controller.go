@@ -5,12 +5,11 @@ import (
 	"awesomeProject1/pkg/models"
 	"awesomeProject1/request"
 	"awesomeProject1/response"
+	"awesomeProject1/service"
 	"errors"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"log"
-	"math"
-	"strconv"
 	"time"
 )
 
@@ -40,176 +39,123 @@ func (ctrl *DiaryController) Routes(r *gin.Engine) {
 
 // CreateDiary 创建新的日记
 func (ctrl *DiaryController) CreateDiary(c *gin.Context) {
-	//用户id
-	userIDAny, _ := c.Get("user_id")
-	userID := userIDAny.(uint)
-	var diary models.Diary
 	var diaryDto request.DiaryDto
-
-	// 绑定请求中的 JSON 数据到 diary 变量中
+	// 绑定请求中的 JSON 数据到 diaryDto 变量中
 	if err := c.ShouldBindJSON(&diaryDto); err != nil {
-		response.WriteJSON(c, response.NewResponse(1, nil, "无效的输入"))
+		response.WriteJSON(c, response.UserErrorResponse(nil, "无效的输入"))
 		return
 	}
-
 	// 检查日记内容是否为空
 	if diaryDto.Content == "" {
-		response.WriteJSON(c, response.NewResponse(1, nil, "日记内容不能为空"))
+		response.WriteJSON(c, response.UserErrorResponse(nil, "日记内容不能为空"))
 		return
 	}
-	diary.Content = diaryDto.Content
-
-	// 检查 user_id 是否在 users 表中存在
-	var user models.User
-	if err := ctrl.DB.Where("id = ?", userID).First(&user).Error; err != nil {
-		response.WriteJSON(c, response.NewResponse(1, nil, "用户未找到"))
-		return
-	}
-	diary.UserID = userID
-
 	// 查找标签,未创建的接口返回错误
 	var tags []models.Tag
 	for _, tagId := range diaryDto.TagIds {
 		var tag models.Tag
 		if err := ctrl.DB.First(&tag, "id = ?", tagId).Error; err != nil {
-			response.WriteJSON(c, response.NewResponse(1, nil, "标签未找到"))
+			response.WriteJSON(c, response.UserErrorResponse(nil, "标签未找到"))
 			return
 		}
 		tags = append(tags, tag)
 	}
-
-	diary.Tags = tags
-
+	// 获取当前用户ID
+	userIDAny, _ := c.Get("user_id")
+	userID := userIDAny.(uint)
+	// 创建日记记录
+	diary := models.Diary{
+		Content: diaryDto.Content,
+		Tags:    tags,
+		UserID:  userID, // 设置外键
+	}
 	// 使用 GORM 创建日记记录
 	result := ctrl.DB.Create(&diary)
-
 	// 检查是否有错误发生
 	if result.Error != nil {
-		// 如果有错误，返回错误信息和 HTTP 500 状态码
-
-		response.WriteJSON(c, response.NewResponse(2, nil, "创建日记失败"))
+		response.WriteJSON(c, response.InternalErrorResponse(nil, "创建日记失败"))
 		return
 	}
-
-	// 如果创建成功，返回创建的日记和 HTTP 201 状态码
-	response.WriteJSON(c, response.NewResponse(0, diary, "日记创建成功"))
+	// 转换为 DTO
+	diaryDto = request.DiaryToDto(diary)
+	//创建成功返回响应
+	response.WriteJSON(c, response.SuccessResponse(diaryDto))
 }
 
 // GetDiaries 获取用户的日记列表
 func (ctrl *DiaryController) GetDiaries(c *gin.Context) {
-	userIDAny, _ := c.Get("user_id")
-	userID := userIDAny.(uint)
-	// QueryParams 用于绑定查询参数的结构体
-	type QueryParams struct {
-		Page      int    `form:"page"`
-		PageSize  int    `form:"pageSize"`
-		SortField string `form:"sortField"`
-		SortBy    string `form:"sortBy"`
-		QueryType string `form:"queryType"`
+	// 绑定查询参数
+	var queryParams struct {
+		Page     int `form:"page" binding:"required,gte=1"`
+		PageSize int `form:"pageSize" binding:"required,gte=1"`
+		//UserID    string `form:"userId" binding:"required"`
 		TagID     string `form:"tagId"`
 		Content   string `form:"content"`
 		StartTime string `form:"startTime"`
 		EndTime   string `form:"endTime"`
+		SortField string `form:"sortField"`
+		SortBy    string `form:"sortBy"`
 	}
-
-	// 绑定查询参数
-	var queryParams QueryParams
 	if err := c.ShouldBindQuery(&queryParams); err != nil {
-		response.WriteJSON(c, response.NewResponse(1, nil, "无效的查询参数"))
+		response.WriteJSON(c, response.UserErrorNoMsgResponse("无效的查询参数"))
+		fmt.Printf(err.Error())
 		return
 	}
 
-	// 临时调试输出
-	log.Printf("QueryParams: %+v", queryParams)
-
-	//验证分页参数
-	if queryParams.Page < 1 || queryParams.PageSize < 1 {
-		response.WriteJSON(c, response.NewResponse(1, nil, "无效的页码或页面大小"))
+	// 从上下文中获取用户ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.WriteJSON(c, response.UserErrorNoMsgResponse("用户未登录"))
+		c.Abort()
 		return
 	}
-
-	// 构建基础查询
-	var result *gorm.DB
-	result = ctrl.DB.Model(&models.Diary{}).Where("user_id = ?", userID)
-
-	// 根据标签 ID 查询
-	if queryParams.TagID != "" {
-		tagID, err := strconv.Atoi(queryParams.TagID)
-		if err != nil {
-			response.WriteJSON(c, response.NewResponse(1, nil, "无效的标签 ID"))
-			return
+	// 定义 modifier 函数
+	modifier := func(db *gorm.DB) *gorm.DB {
+		query := db.Where("user_id = ?", userID)
+		if queryParams.TagID != "" {
+			query = query.Where("tag_id = ?", queryParams.TagID)
 		}
-		result = result.Joins("JOIN diary_tags ON diaries.id = diary_tags.diary_id").
-			Where("diary_tags.tag_id = ?", tagID)
-	}
-
-	// 根据内容查询
-	if queryParams.Content != "" {
-		result = result.Where("content LIKE ?", "%"+queryParams.Content+"%")
-	}
-
-	// 根据起始时间查询
-	if queryParams.StartTime != "" {
-		startTime, err := time.Parse("2006-01-02", queryParams.StartTime)
-		if err != nil {
-			response.WriteJSON(c, response.NewResponse(1, nil, "无效的开始时间"))
-			return
+		if queryParams.Content != "" {
+			query = query.Where("content LIKE ?", "%"+queryParams.Content+"%")
 		}
-		result = result.Where("created_at >= ?", startTime)
-	}
-
-	// 根据结束时间查询
-	if queryParams.EndTime != "" {
-		endTime, err := time.Parse("2006-01-02", queryParams.EndTime)
-		if err != nil {
-			response.WriteJSON(c, response.NewResponse(1, nil, "无效的结束时间"))
-			return
+		if queryParams.StartTime != "" {
+			query = query.Where("created_at >= ?", queryParams.StartTime)
 		}
-		result = result.Where("created_at <= ?", endTime)
-	}
-
-	// 应用分页和排序
-	offset := (queryParams.Page - 1) * queryParams.PageSize
-	var diaries []models.Diary
-	var count int64
-	var err error
-
-	// 先获取总数
-	err = result.Preload("Tags").Count(&count).Error
-	if err != nil {
-		response.WriteJSON(c, response.NewResponse(2, nil, "获取日记列表失败"))
-	} else {
-		// 计算总页数
-		totalPages := int(math.Ceil(float64(count) / float64(queryParams.PageSize)))
-
-		// 应用分页
-		result = result.Preload("Tags").Offset(offset).Limit(queryParams.PageSize)
-
-		// 应用排序
-		if queryParams.SortField != "" && queryParams.SortBy != "" {
-			sortStr := queryParams.SortField + " " + queryParams.SortBy
-			result = result.Order(sortStr)
+		if queryParams.EndTime != "" {
+			query = query.Where("created_at <= ?", queryParams.EndTime)
 		}
-
-		// 获取日记列表
-		err = result.Find(&diaries).Error
-		if err != nil {
-			response.WriteJSON(c, response.NewResponse(2, nil, "获取日记列表失败"))
+		// 设置默认排序字段为创建时间，排序方式为降序
+		if queryParams.SortField == "" || queryParams.SortBy == "" {
+			query = query.Order("created_at desc")
 		} else {
-
-			diaryResponses := make([]response.DiaryResponse, len(diaries))
-			for i, diary := range diaries {
-				diaryResponses[i] = response.DiaryResponse{
-					ID:        diary.ID,
-					Content:   diary.Content,
-					CreatedAt: diary.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-					UpdatedAt: diary.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-				}
-			}
-
-			response.WriteJSON(c, response.NewResponse(0, gin.H{"diaries": diaryResponses, "currentPage": queryParams.Page, "totalPages": totalPages}, "获取日记列表成功"))
+			query = query.Order(queryParams.SortField + " " + queryParams.SortBy)
 		}
+		return query
 	}
+
+	// 调用分页服务
+	paginationResult, err := service.Paginate(ctrl.DB, queryParams.Page, queryParams.PageSize, &models.Diary{}, modifier)
+	if err != nil {
+		response.WriteJSON(c, response.InternalErrorResponse(nil, "获取日记列表失败"))
+		return
+	}
+
+	// 转换日记数据为DiaryVo
+	diaryVos := make([]response.DiaryVo, len(paginationResult.Records))
+	for i, diary := range paginationResult.Records {
+		diaryVos[i].Copy(diary)
+	}
+	// 创建包含分页信息的响应VO
+	paginatedDiaryVo := response.PaginatedDiaryVo{}
+	paginatedDiaryVo.Copy(diaryVos, response.PaginationData{
+		Page:       paginationResult.Page,
+		PageSize:   paginationResult.PageSize,
+		TotalCount: paginationResult.Total,
+		TotalPages: paginationResult.TotalPages,
+	})
+
+	// 返回分页响应
+	response.WriteJSON(c, response.NewResponse(200, paginatedDiaryVo, "success"))
 }
 
 // UpdateDiary 更新日记内容
