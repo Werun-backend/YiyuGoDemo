@@ -50,3 +50,9 @@ func UserToDto(user models.User) UserDto {
 		PhoneNumber: user.PhoneNumber,
 	}
 }
+
+// LoginDto 登录请求的数据传输对象
+type LoginDto struct {
+	PhoneNumber string `json:"phoneNumber"`
+	Password    string `json:"password"`
+}
