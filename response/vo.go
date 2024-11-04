@@ -81,3 +81,10 @@ func (tagVo *TagVo) Copy(tag models.Tag) {
 	tagVo.UpdatedAt = tag.UpdatedAt.Format("2006-01-02 15:04:05")
 	tagVo.Name = tag.Name
 }
+
+// LoginVo 用于API响应的登录信息
+type LoginVo struct {
+	UserId      string `json:"userId"`
+	PhoneNumber string `json:"phoneNumber"`
+	Token       string `json:"token"`
+}
